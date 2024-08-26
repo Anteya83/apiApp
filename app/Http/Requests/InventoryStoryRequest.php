@@ -24,7 +24,7 @@ class InventoryStoryRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'date' => 'required|date_format:Y-m-d|before_or_equal:today',
+            'date' => 'required|date_format:Y-m-d|before_or_equal:now',
         ];
     }
 
