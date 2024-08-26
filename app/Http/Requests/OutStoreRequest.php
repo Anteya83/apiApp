@@ -26,7 +26,7 @@ class OutStoreRequest extends FormRequest
         return [
             'date' => 'date_format:Y-m-d H:i:s|before_or_equal:now',
             'items' => 'required|array',
-            'items.*.product_id' => 'required|integer|gt:0',
+            'items.*.product_id' => 'required|integer|gt:0|distinct',
             'items.*.quantity' => 'required|integer|gt:0',
         ];
     }
