@@ -1,66 +1,131 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+- при проведении инвентар датой ранее текущей - во всех  инв. после этой даты по этому товару пересчитаются и перезаполнятся ошибки инв-ции   
+- при проведении прихода датой ранее -во всех  инв. после этой даты по этому товару пересчитаются и перезаполнятся ошибки инв-ции и ср цена  
+- при проведении расхода датой ранее -во всех  инв. после этой даты по этому товару пересчитаются и перезаполнятся ошибки инв-ции  
+ 
+Поэтому руками в бд ничего нельзя заводить!!!  
+Сделала один тест tests/Api/OutDocumentTest - просто показать, что умею))  
+При заведении документа расход , если на складе по остаткам товара не будет или его количество меньше чем в расходном док-те вернется ошибка, 
+но остаток считается на дату документа, поэтому если завести более ранней датой приход завести получится, но расход текущей датой уже при 
+минусовом остатке не даст- как сигнал бухгалтерии, что нужно сначала завести приход 
+  
+В терминале:   
+php artisan migrate - создаст все таблицы  
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+php artisan serve - запустит сервер 
 
-## About Laravel
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+в файле env нужно внести свои данные для подключения к бд 
+в файлу config/database нужно указать   'default' => env('DB_CONNECTION', 'sqlite'), базу данных используемую и внести соотв данные 
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+Инструкция к API  
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+Приход  
+  -POST /api/income-documents — создать новый приход   
+   Пример корректного запроса   
+   {  
+       "date": "2024-08-02 08:01:02",  Не ОБЯЗАТЕЛЬНЫЙ ПАРАМЕТР, ЕСЛИ ДАТУ НЕ ПЕРЕДАТЬ ДАТОЙ ДОКУМЕНТА БУДЕТ СЧИТАТЬСЯ ТЕКУЩАЯ ДАТА  
+       "items": [{ "product_id": 6, "quantity": 4, "price": 10.10},{ "product_id": 5, "quantity": 3,"price": 10.10},...]
+   }  
+ 
+Расход   
+  -POST /api/out-documents — создать новый расход   
+  Пример корректного запроса   
+  // если на складе по остаткам товара не будет или его количество меньше чем в расходном док-те вернется ошибка - не хватает остатков на складе   
+  { 
+    "date": "2024-08-20 08:01:02",  Не ОБЯЗАТЕЛЬНЫЙ ПАРАМЕТР, ЕСЛИ ДАТУ НЕ ПЕРЕДАТЬ ДАТОЙ ДОКУМЕНТА БУДЕТ СЧИТАТЬСЯ ТЕКУЩАЯ ДАТА   
+    "items": [{ "product_id": 6, "quantity": 3},{ "product_id": 2, "quantity": 1},...] 
+  }  
+ 
+Инвентаризация    
+  - POST /api/inventory-documents — создать инв-цию    
+  Пример корректного запроса    
+  {    
+      "date": "2024-08-20 08:01:02",  Не ОБЯЗАТЕЛЬНЫЙ ПАРАМЕТР, ЕСЛИ ДАТУ НЕ ПЕРЕДАТЬ ДАТОЙ ДОКУМЕНТА БУДЕТ СЧИТАТЬСЯ ТЕКУЩАЯ ДАТА   
+      "items": [{ "product_id": 6, "quantity": 3},{ "product_id": 2, "quantity": 1},...]   
+  }    
+    
+  - GET /api/inventory-results?date=2024-08-21 — получить инвентаризации по дате  
+   Пример ответа    
+     [
+         {
+             "product_id": 6,
+             "inventory_quantity": 9, количество по инв-ции
+             "inventory_quantity_sum": 113.49, сумма по инв-ции
+             "inventory_mistake": -1, ошибка инв-ции
+             "inventory_mistake_sum": -12.61  сумма ошибки
+         },
+         {
+             "product_id": 5,
+             "inventory_quantity": 3,
+             "inventory_quantity_sum": 35.04,
+             "inventory_mistake": 1,
+             "inventory_mistake_sum": 11.68
+         },
+         {
+             "product_id": 2,
+             "inventory_quantity": 1,
+             "inventory_quantity_sum": 144.04,
+             "inventory_mistake": -4,
+             "inventory_mistake_sum": -576.16
+         }
+     ]
 
-## Learning Laravel
+ 
+Вся история движения   
+ - ответ отсортирован по id товара  и дате   
+ - GET /api/documents-history — получить историю движения   
+   
+   Пример ответа   
+   [
+       {
+           "date": "2024-08-21 08:11:47",
+           "type": "приход",
+           "product_id": 2,
+           "quantity": 8,
+           "stock_after": 8     расчетный остаток
+       },
+       {
+           "date": "2024-08-21 08:21:12",
+           "type": "расход",
+           "product_id": 2,
+           "quantity": 2,
+           "stock_after": 6
+       },
+       {
+           "date": "2024-08-21 10:05:03",
+           "type": "расход",
+           "product_id": 2,
+           "quantity": 1,
+           "stock_after": 5
+       },
+       {
+           "date": "2024-08-21 18:01:38",
+           "type": "инвентаризация",
+           "product_id": 2,
+           "quantity": 1,
+           "stock_after": 1,
+           "inventory_mistake": -4  ошибка инвентаризации
+       },
+       {
+           "date": "2024-08-21 08:11:47",
+           "type": "приход",
+           "product_id": 3,
+           "quantity": 6,
+           "stock_after": 6
+       },
+       {
+           "date": "2024-08-21 08:21:12",
+           "type": "расход",
+           "product_id": 3,
+           "quantity": 1,
+           "stock_after": 5
+       },
+       {
+           "date": "2024-08-21 11:24:15",
+           "type": "расход",
+           "product_id": 3,
+           "quantity": 1,
+           "stock_after": 4
+       },....]
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
-
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains over 2000 video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-## Laravel Sponsors
-
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the Laravel [Patreon page](https://patreon.com/taylorotwell).
-
-### Premium Partners
-
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Cubet Techno Labs](https://cubettech.com)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[Many](https://www.many.co.uk)**
-- **[Webdock, Fast VPS Hosting](https://www.webdock.io/en)**
-- **[DevSquad](https://devsquad.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[OP.GG](https://op.gg)**
-- **[WebReinvent](https://webreinvent.com/?utm_source=laravel&utm_medium=github&utm_campaign=patreon-sponsors)**
-- **[Lendio](https://lendio.com)**
-
-## Contributing
-
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
-
-## Code of Conduct
-
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
